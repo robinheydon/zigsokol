@@ -11,6 +11,11 @@ var pass_action : sg.PassAction = .{};
 var now : f64 = 0;
 var delta_time : f64 = 0;
 
+var frame_time_index : usize = 0;
+var frame_times: [8]f64 = undefined;
+
+var go_slow: usize = 0;
+
 export fn init () void
 {
     sg.setup (.{
@@ -30,6 +35,11 @@ export fn init () void
     sdtx.setup (sdtx_desc);
 
     std.debug.print ("{}\n", .{sg.queryBackend()});
+
+    for (0..frame_times.len) |i|
+    {
+        frame_times[i] = 0;
+    }
 }
 
 export fn cleanup () void
@@ -74,11 +84,22 @@ fn get_now () f64
 
 export fn frame () void
 {
-    delta_time = sapp.frameDuration ();
-    now += delta_time;
-    const fps = 1 / delta_time;
+    // delta_time = sapp.frameDuration ();
 
-    const now_time = get_now ();
+    now = get_now ();
+    frame_times[frame_time_index] = now;
+    frame_time_index += 1;
+    if (frame_time_index >= frame_times.len)
+    {
+        frame_time_index = 0;
+    }
+
+    delta_time = (now - frame_times[frame_time_index]) / @as (f64, @floatFromInt (frame_times.len - 1));
+
+    // delta_time = now - last_now;
+    // last_now = now;
+
+    const fps = 1 / delta_time;
 
     const width = sapp.widthf ();
     const height = sapp.heightf ();
@@ -89,7 +110,7 @@ export fn frame () void
     sdtx.home ();
     sdtx.font (0);
     sdtx.color3b (255, 255, 255);
-    sdtx.print ("now {d:9.3} {d:9.3}\n", .{now, now_time});
+    sdtx.print ("now {d:9.3}\n", .{now});
     sdtx.print ("dt  {d:9.3} ms\n", .{delta_time * 1000});
     sdtx.print ("fps {d:9.0} Hz\n", .{fps});
 
@@ -99,11 +120,11 @@ export fn frame () void
 
     sgl.pushMatrix ();
     sgl.translate (600, 500, 0);
-    sgl.rotate (@floatCast (now), 0, 0, 1);
+    sgl.rotate (@floatCast (6.28 * now / 4), 0, 0, 1);
     draw_square (800, 800);
     sgl.popMatrix ();
 
-    draw_frame_times (4, height);
+    draw_frame_times (16, height);
 
     sg.beginDefaultPass (pass_action, sapp.width (), sapp.height ());
 
@@ -114,7 +135,10 @@ export fn frame () void
 
     sg.commit ();
 
-    std.time.sleep (7 * 1000_000); // ms
+    for (0..go_slow) |_|
+    {
+        for (0..5_000_000) |i| { _ = i; }
+    }
 }
 
 export fn event (cev: [*c]const sapp.Event) void
@@ -154,6 +178,20 @@ fn on_key_down (ev: sapp.Event) void
     else if (ev.key_code == .F11 and ev.modifiers == 0)
     {
         sapp.toggleFullscreen ();
+    }
+    else if (ev.key_code == .F1 and ev.modifiers == 0)
+    {
+        if (go_slow < 24)
+        {
+            go_slow += 1;
+        }
+    }
+    else if (ev.key_code == .F2 and ev.modifiers == 0)
+    {
+        if (go_slow > 0)
+        {
+            go_slow -= 1;
+        }
     }
 }
 
