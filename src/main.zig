@@ -5,9 +5,10 @@ const sg = sokol.gfx;
 const sgl = sokol.gl;
 const sgapp = sokol.app_gfx_glue;
 const stm = sokol.time;
+const sdtx = sokol.debugtext;
 
 var pass_action : sg.PassAction = .{};
-var last_now : f64 = 0;
+var now : f64 = 0;
 var delta_time : f64 = 0;
 
 export fn init () void
@@ -24,31 +25,28 @@ export fn init () void
 
     sgl.setup (.{});
     stm.setup ();
+    var sdtx_desc: sdtx.Desc = .{};
+    sdtx_desc.fonts[0] = sdtx.fontCpc();
+    sdtx.setup (sdtx_desc);
 
     std.debug.print ("{}\n", .{sg.queryBackend()});
 }
 
 export fn cleanup () void
 {
+    sdtx.shutdown ();
     stm.setup ();
     sgl.shutdown ();
     sg.shutdown ();
 }
 
-fn get_now () f64
-{
-    const now = stm.now ();
-    const secs = stm.stm_sec (now);
-    return secs;
-}
-
 fn draw_square (width: f32, height: f32) void
 {
     sgl.beginQuads ();
-    sgl.v2fC3b (0, 0, 255, 0, 0);
-    sgl.v2fC3b (width, 0, 0, 255, 0);
-    sgl.v2fC3b (width, height, 0, 0, 255);
-    sgl.v2fC3b (0, height, 0, 255, 255);
+    sgl.v2fC3b (-width/2, -height/2, 192, 192, 64);
+    sgl.v2fC3b (width/2, -height/2, 64, 192, 192);
+    sgl.v2fC3b (width/2, height/2, 192, 64, 192);
+    sgl.v2fC3b (-width/2, height/2, 192, 192, 192);
     sgl.end ();
 }
 
@@ -56,66 +54,67 @@ fn draw_frame_times (width: f32, height: f32) void
 {
     const bar_height : f32 = @floatCast (height - height * delta_time * 60);
 
+    sgl.viewportf (0, 0, sapp.widthf (), sapp.heightf (), true);
+    sgl.defaults ();
+    sgl.ortho (0, sapp.widthf (), sapp.heightf (), 0, -1, 1);
+
     sgl.beginQuads ();
-    sgl.v2fC3b (0, bar_height, 1, 0, 0);
-    sgl.v2fC3b (width - 1, bar_height, 1, 0, 0);
-    sgl.v2fC3b (width - 1, height - 1, 1, 0, 0);
-    sgl.v2fC3b (0, height - 1, 1, 0, 0);
+    sgl.c3b (255, 0, 0);
+    sgl.v2f (0, bar_height);
+    sgl.v2f (width - 1, bar_height);
+    sgl.v2f (width - 1, height - 1);
+    sgl.v2f (0, height - 1);
     sgl.end ();
+}
 
-    sgl.beginLineStrip ();
-    sgl.v2fC3b (0, 0, 1, 0, 0);
-    sgl.v2fC3b (width - 1, 0, 1, 0, 0);
-    sgl.v2fC3b (width - 1, height - 1, 0, 0, 0);
-    sgl.v2fC3b (0, height - 1, 1, 0, 0);
-    sgl.v2fC3b (0, 0, 1, 0, 0);
-    sgl.end ();
-
-    sgl.beginLineStrip ();
-    sgl.v2fC3b (0, 0, 0, 1, 0);
-    sgl.v2fC3b (width - 1, 0, 0, 1, 0);
-    sgl.v2fC3b (width - 1, bar_height, 0, 1, 0);
-    sgl.v2fC3b (0, bar_height, 0, 1, 0);
-    sgl.v2fC3b (0, 0, 0, 1, 0);
-    sgl.end ();
+fn get_now () f64
+{
+    return stm.sec (stm.now ());
 }
 
 export fn frame () void
 {
-    const now = get_now ();
-    delta_time = now - last_now;
-    // const fps = 1 / dt;
-    last_now = now;
-    // std.debug.print ("{d:16.9} {d:16.9} {d}\r", .{now, dt, fps});
+    delta_time = sapp.frameDuration ();
+    now += delta_time;
+    const fps = 1 / delta_time;
+
+    const now_time = get_now ();
 
     const width = sapp.widthf ();
     const height = sapp.heightf ();
+
+    sdtx.canvas (width / 4, height / 4);
+
+    sdtx.origin (2.0, 2.0);
+    sdtx.home ();
+    sdtx.font (0);
+    sdtx.color3b (255, 255, 255);
+    sdtx.print ("now {d:9.3} {d:9.3}\n", .{now, now_time});
+    sdtx.print ("dt  {d:9.3} ms\n", .{delta_time * 1000});
+    sdtx.print ("fps {d:9.0} Hz\n", .{fps});
 
     sgl.viewportf (0, 0, width, height, true);
     sgl.defaults ();
     sgl.ortho (0, width, height, 0, -1, 1);
 
     sgl.pushMatrix ();
-    sgl.translate (200, 250, 0);
+    sgl.translate (600, 500, 0);
     sgl.rotate (@floatCast (now), 0, 0, 1);
-    draw_square (100, 100);
+    draw_square (800, 800);
     sgl.popMatrix ();
 
-    sgl.pushMatrix ();
-    sgl.translate (150, 100, 0);
-    sgl.rotate (@floatCast (delta_time * 40), 0, 0, 1);
-    draw_square (100, 100);
-    sgl.popMatrix ();
-
-    draw_frame_times (16, height);
+    draw_frame_times (4, height);
 
     sg.beginDefaultPass (pass_action, sapp.width (), sapp.height ());
 
     sgl.draw ();
+    sdtx.draw ();
 
     sg.endPass ();
 
     sg.commit ();
+
+    std.time.sleep (7 * 1000_000); // ms
 }
 
 export fn event (cev: [*c]const sapp.Event) void
